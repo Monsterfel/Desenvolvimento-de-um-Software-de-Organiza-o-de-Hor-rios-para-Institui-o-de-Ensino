@@ -1,0 +1,167 @@
+import pandas as pd
+from fpdf import FPDF
+import tkinter as tk
+from tkinter import messagebox, ttk
+
+class Professor:
+    def __init__(self, nome, aulas_por_dia, aulas_por_semana):
+        self.nome = nome
+        self.aulas_por_dia = aulas_por_dia
+        self.aulas_por_semana = aulas_por_semana
+        self.horarios = []
+
+class Turma:
+    def __init__(self, ano, serie):
+        self.ano = ano
+        self.serie = serie
+        self.horarios = []
+
+class Disciplina:
+    def __init__(self, nome, professor, turma):
+        self.nome = nome
+        self.professor = professor
+        self.turma = turma
+
+class GestorDeHorarios:
+    def __init__(self):
+        self.professores = []
+        self.turmas = []
+        self.disciplinas = []
+
+    def cadastrar_professor(self, nome, aulas_por_dia, aulas_por_semana):
+        professor = Professor(nome, aulas_por_dia, aulas_por_semana)
+        self.professores.append(professor)
+
+    def cadastrar_turma(self, ano, serie):
+        turma = Turma(ano, serie)
+        self.turmas.append(turma)
+
+    def cadastrar_disciplina(self, nome, professor, turma):
+        disciplina = Disciplina(nome, professor, turma)
+        self.disciplinas.append(disciplina)
+
+    def adicionar_horario(self, professor_nome, turma_serie, disciplina_nome, dia, hora):
+        professor = next((p for p in self.professores if p.nome == professor_nome), None)
+        turma = next((t for t in self.turmas if t.serie == turma_serie), None)
+
+        if not professor or not turma:
+            return "Professor ou Turma não encontrados."
+
+        # Verificar conflitos
+        if self.verificar_conflito(professor, turma, dia, hora):
+            return "Conflito de horário encontrado. Aula não agendada."
+
+        professor.horarios.append((disciplina_nome, dia, hora))
+        turma.horarios.append((disciplina_nome, dia, hora))
+        return f"Aula de {disciplina_nome} agendada para {dia} às {hora}."
+
+    def verificar_conflito(self, professor, turma, dia, hora):
+        # Verifica se já existe uma aula agendada no mesmo dia e hora
+        for horario in professor.horarios:
+            if horario[1] == dia and horario[2] == hora:
+                return True
+        for horario in turma.horarios:
+            if horario[1] == dia and horario[2] == hora:
+                return True
+        return False
+
+    def visualizar_horarios(self):
+        # Cria um DataFrame para visualizar os horários
+        horarios = []
+        for professor in self.professores:
+            for aula in professor.horarios:
+                horarios.append({'Professor': professor.nome, 'Disciplina': aula[0], 'Dia': aula[1], 'Hora': aula[2]})
+        return pd.DataFrame(horarios)
+
+    def exportar_horario_pdf(self):
+        df = self.visualizar_horarios()
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+
+        for index, row in df.iterrows():
+            pdf.cell(200, 10, txt=f"{row['Professor']} - {row['Disciplina']} - {row['Dia']} - {row['Hora']}", ln=True)
+
+        pdf.output("horarios.pdf")
+        return "Horário exportado para 'horarios.pdf'."
+
+class Interface:
+    def __init__(self, gestor):
+        self.gestor = gestor
+        self.root = tk.Tk()
+        self.root.title("Gestor de Horários")
+
+        # Frame de adição de horários
+        self.frame_adicionar = tk.Frame(self.root)
+        self.frame_adicionar.pack(pady=10)
+
+        tk.Label(self.frame_adicionar, text="Professor:").grid(row=0, column=0)
+        self.entry_professor = tk.Entry(self.frame_adicionar)
+        self.entry_professor.grid(row=0, column=1)
+
+        tk.Label(self.frame_adicionar, text="Turma:").grid(row=1, column=0)
+        self.entry_turma = tk.Entry(self.frame_adicionar)
+        self.entry_turma.grid(row=1, column=1)
+
+        tk.Label(self.frame_adicionar, text="Disciplina:").grid(row=2, column=0)
+        self.entry_disciplina = tk.Entry(self.frame_adicionar)
+        self.entry_disciplina.grid(row=2, column=1)
+
+        tk.Label(self.frame_adicionar, text="Dia:").grid(row=3, column=0)
+        self.entry_dia = tk.Entry(self.frame_adicionar)
+        self.entry_dia.grid(row=3, column=1)
+
+        tk.Label(self.frame_adicionar, text="Hora:").grid(row=4, column=0)
+        self.entry_hora = tk.Entry(self.frame_adicionar)
+        self.entry_hora.grid(row=4, column=1)
+
+        self.btn_adicionar = tk.Button(self.frame_adicionar, text="Adicionar Horário", command=self.adicionar_horario)
+        self.btn_adicionar.grid(row=5, columnspan=2)
+
+        # Frame para visualização
+        self.frame_visualizar = tk.Frame(self.root)
+        self.frame_visualizar.pack(pady=10)
+
+        self.btn_visualizar = tk.Button(self.frame_visualizar, text="Visualizar Horários", command=self.visualizar_horarios)
+        self.btn_visualizar.pack()
+
+        # Frame para exportar
+        self.frame_exportar = tk.Frame(self.root)
+        self.frame_exportar.pack(pady=10)
+
+        self.btn_exportar = tk.Button(self.frame_exportar, text="Exportar para PDF", command=self.exportar_pdf)
+        self.btn_exportar.pack()
+
+        self.root.mainloop()
+
+    def adicionar_horario(self):
+        professor_nome = self.entry_professor.get()
+        turma_serie = self.entry_turma.get()
+        disciplina_nome = self.entry_disciplina.get()
+        dia = self.entry_dia.get()
+        hora = self.entry_hora.get()
+
+        resultado = self.gestor.adicionar_horario(professor_nome, turma_serie, disciplina_nome, dia, hora)
+        messagebox.showinfo("Resultado", resultado)
+
+    def visualizar_horarios(self):
+        df = self.gestor.visualizar_horarios()
+        if df.empty:
+            messagebox.showinfo("Horários", "Nenhum horário cadastrado.")
+        else:
+            messagebox.showinfo("Horários", df.to_string(index=False))
+
+    def exportar_pdf(self):
+        resultado = self.gestor.exportar_horario_pdf()
+        messagebox.showinfo("Exportação", resultado)
+
+def main():
+    gestor = GestorDeHorarios()
+    gestor.cadastrar_professor("João", 4, 20)
+    gestor.cadastrar_turma("2024", "1º Ano")
+    gestor.cadastrar_disciplina("Matemática", "João", "1º Ano")
+
+    Interface(gestor)
+
+if __name__ == "__main__":
+    main()
